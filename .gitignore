@@ -2,3 +2,4 @@ scratch.py
 meta/auth.dat
 log/cron.log
 runBot.sh
+util/__pychache__/*
