@@ -28,12 +28,15 @@ class TweetManager(object):
 				self.__tags.append(line.strip())
 
 
-	def findTweets(self,followUser=False):
+	def findTweets(self,followUser=False,favorCutOff=None,retweetCutOff=None):
 		
+		# set favroCutOff and retweetCutoff
+		self.__favorCutOff = favorCutOff
+		self.__retweetCutOff = retweetCutOff
 		# read hastTags
 		self.__readTags()
 		# select a random tag
-		tag = "#" + self.__tags[randint(0,len(self.__tags))]
+		tag = "#" + self.__tags[randint(0,len(self.__tags)-1)]
 		# retweet a popular tweet with this tag and follow the
 		# user if applicable
 		print("Looking for tag " + tag)
@@ -66,9 +69,7 @@ class TweetManager(object):
 	def __processTweet(self,tweet):
 
 		# some cut-off vals
-		retweetCutOff = 10
-		retweetCutOff = 10
-		userFollowerCutOff = 1000
+		userFollowerCutOff = randint(0,1000) + 300
 
 		# determine whether to follow the user of not
 		userId = tweet.user.id
@@ -87,7 +88,7 @@ class TweetManager(object):
 		# check if tweet is popular
 		isPopular = False
 		# tweet stats
-		if retwitCount >= retweetCutOff and favorCount >=retweetCutOff:
+		if retwitCount>=self.__favorCutOff and favorCount>=self.__favorCutOff:
 			isPopular = True
 		# is user popular (user stats)
 		if userFollowerCount < userFollowerCutOff:
@@ -96,13 +97,19 @@ class TweetManager(object):
 		# if tweet is popular then retweet it, else return
 		if isPopular:
 			# retweet it
-			tweet.retweet()
-			# favor it with a low chance
-			if not tweet.favorited:
-				self.__favorTweetWithLowChance(tweet)
+			try:
+				tweet.retweet()
+				# favor it with a low chance
+				if not tweet.favorited:
+					self.__favorTweetWithLowChance(tweet)
 
-			self.__retweetDone = True
-			return tweet
+				self.__retweetDone = True
+				return tweet
+
+			except tweepy.TweepError:
+				# print(e.cause)
+				return None
+
 		else:
 			return None
 
@@ -152,6 +159,7 @@ class TweetManager(object):
 				print("Rate limit error!")
 				sleep(10*60)
 
-			except tweepy.TweepError as e:
-				print("The error cause: " + e.cause)
+			except tweepy.TweepError:
 				sleep(5)
+
+
