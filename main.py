@@ -38,7 +38,7 @@ def retweetAtweet(api):
 
 	# look for a tweet with certain # and retweet it
 	tweetManager = twitMng.TweetManager(api=api)
-	tweetManager.findTweets(followUser=False)
+	tweetManager.findTweets(followUser=True)
 
 
 def manageAccount(api):
@@ -55,8 +55,8 @@ def main():
 	# retweet sb!
 	retweetAtweet(api)
 	
-	# manage my fans (or account)
-	# manageAccount(api)
+	manage my fans (or account)
+	manageAccount(api)
 
 
 
