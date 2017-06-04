@@ -52,7 +52,7 @@ def main():
 	# get tweepy API
 	api = getAPI()
 
-	# retweet sb!
+	# retweet somebody!
 	retweetAtweet(api)
 	
 	# manage my fans (or account)
