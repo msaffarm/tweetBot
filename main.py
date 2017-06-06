@@ -46,6 +46,10 @@ def manageAccount(api):
 	# manage my account!
 	accountManager = accMng.AccountManager(api)
 	accountManager.followSomeFans(followProb=0.05)
+	
+	# unfollow traitors
+	accountManager.unfollowTraitors()
+
 
 def main():
 
