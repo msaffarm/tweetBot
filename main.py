@@ -2,6 +2,7 @@ import os
 import sys
 import tweepy
 import requests
+from time import ctime
 # import pandas as pd
 
 UTIL_PATH = os.getcwd() + "/../"
@@ -53,6 +54,7 @@ def manageAccount(api):
 
 def main():
 
+	print("Running Bot at" + str(ctime()) + "\n")
 	# get tweepy API
 	api = getAPI()
 
