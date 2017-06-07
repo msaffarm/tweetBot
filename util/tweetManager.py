@@ -1,8 +1,12 @@
 import os
 import tweepy
+import pandas as pd
 from time import sleep
 from random import randint
+
 META_PATH = os.getcwd() + "/meta/"
+RETWEET_LOG_PATH = os.getcwd() + "/log/"
+RETWEET_LOG_FILE = "retweetLog.csv"
 
 
 class TweetManager(object):
@@ -40,7 +44,7 @@ class TweetManager(object):
 		# retweet a popular tweet with this tag and follow the
 		# user if applicable
 		print("Looking for tag " + tag)
-		print
+		print()
 		# look for a valid tweet to retweet it!
 		while True:
 
@@ -52,7 +56,7 @@ class TweetManager(object):
 				print("Processing tweet of user: @" + str(tweet.user.screen_name))
 				
 				# process tweet
-				selectedTweet = self.__processTweet(tweet)
+				selectedTweet = self.__processTweet(tweet,tag)
 				if not selectedTweet:
 					continue
 
@@ -66,7 +70,7 @@ class TweetManager(object):
 			break
 
 
-	def __processTweet(self,tweet):
+	def __processTweet(self,tweet,tag):
 
 		# some cut-off vals
 		userFollowerCutOff = randint(0,1000) + 300
@@ -99,6 +103,9 @@ class TweetManager(object):
 			# retweet it
 			try:
 				tweet.retweet()
+				# update retweet log
+				self.__updateRetweetLog(tweet,tag)
+				print("Tweet data was saved to retweet log file!")
 				# favor it with a low chance
 				if not tweet.favorited:
 					self.__favorTweetWithLowChance(tweet)
@@ -112,6 +119,53 @@ class TweetManager(object):
 
 		else:
 			return None
+
+
+
+	def __updateRetweetLog(self,tweet,tag):
+
+		# update the retweet metaData
+		retweetFile = RETWEET_LOG_PATH + RETWEET_LOG_FILE
+
+		# if retweetLog file already exists then update it
+		if os.path.lexists(retweetFile):
+			# open it and update it
+			df = pd.read_csv(retweetFile)
+			tweeetUserId = tweet.user.id
+			# check if user has been retweeted already! 
+			if any(df["user ID"].isin([tweeetUserId])):
+				df[df["user ID"]==tweeetUserId]["user retweeted count"] += 1
+			else:
+				# new user is retweeted! update the log accordingly!
+				t = self.__getTweetMetaData(tweet,tag)
+				df = df.append(t)
+				# save new retweetLog
+				df.to_csv(retweetFile,sep=",")
+
+		# if no retweet file is found then create it
+		else:
+			t = self.__getTweetMetaData(tweet,tag)
+			t.to_csv(retweetFile,sep=",")
+
+
+	def __getTweetMetaData(self,tweet,tag):
+
+		# dataframe columns
+		cols = ["user ID","user screen name",\
+		"user retweeted count","user follower count","tweet tag",\
+		"tweet favors", "tweet retweets"]
+
+		# get user
+		user = tweet.user
+		
+		# dataframe values
+		vals = [user.id,user.screen_name,1,user.followers_count,tag,\
+		tweet.favorite_count,tweet.retweet_count]
+
+		# append this data to dataframe
+		t = pd.DataFrame([vals],columns=cols)
+
+		return t
 
 
 	def __followUser(self,userId):
@@ -140,7 +194,7 @@ class TweetManager(object):
 
 		# favor the tweet with low chance!
 		# if tweet is popular then like it
-		if tweet.favorite_count > 10:
+		if tweet.favorite_count > 30:
 			tweet.favorite()
 			print("Tweet was liked!")
 
@@ -149,6 +203,7 @@ class TweetManager(object):
 		if rand < 1:
 			tweet.favorite()
 			print("Tweet was liked!")
+
 
 	def __errorHandler(self,cursor):
 		while True:
