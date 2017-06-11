@@ -1,11 +1,16 @@
 import os
+import sys
 import tweepy
 import pandas as pd
 from time import sleep
-from random import randint
+from random import randint, sample
 
-META_PATH = os.getcwd() + "/meta/"
-RETWEET_LOG_PATH = os.getcwd() + "/log/"
+CURRENT_DIR =  os.path.abspath(os.path.dirname(__file__))
+sys.path.append(CURRENT_DIR)
+from tweetAnalyzer import TweetAnalyzer
+
+META_PATH = CURRENT_DIR + "/../meta/"
+RETWEET_LOG_PATH = CURRENT_DIR + "/../log/"
 RETWEET_LOG_FILE = "retweetLog.csv"
 
 
@@ -24,56 +29,125 @@ class TweetManager(object):
 		self.__tags = []
 
 
-	def __readTags(self):
 
+	def __chooseHashtagsRandom(self,numOfTags=2):
+		
 		# read hashtag file
+		allTags = []
 		with open(META_PATH + "hashTags.dat",'r') as file:
 			for line in file:
-				self.__tags.append(line.strip())
+				allTags.append(line.strip())
+
+		# randomly select hashtags from hashTags.dat file
+
+		selectedTagsIdx = sample(range(len(allTags)),numOfTags)
+		# empty tags list in case of repetitice calls to this 
+		# function
+		self.__tags = []
+
+		for index in selectedTagsIdx:
+			self.__tags.append("#" + allTags[index])
+
+		# print tags
+		print("Looking for tag(s) " + str(self.__tags))
+		print()
 
 
-	def findTweets(self,followUser=False,favorCutOff=None,retweetCutOff=None):
+
+	def findTweets(self,chooseRandomHashtags=True,searchHashtags=None,**kwargs):
 		
+		# process arguments
+		args = kwargs.keys()
+		if "followUser" not in args:
+			kwargs["followUser"] = False
+		if "favorCutOff" not in args:
+			kwargs["favorCutOff"] = 5
+		if "retweetCutOff" not in args:
+			kwargs["retweetCutOff"] = 5
+		if "numberOfRandomHashtags" not in args:
+			kwargs["numberOfRandomHashtags"] = 1
+
 		# set favroCutOff and retweetCutoff
-		self.__favorCutOff = favorCutOff
-		self.__retweetCutOff = retweetCutOff
-		# read hastTags
-		self.__readTags()
-		# select a random tag
-		tag = "#" + self.__tags[randint(0,len(self.__tags)-1)]
+		self.__favorCutOff = kwargs["favorCutOff"]
+		self.__retweetCutOff = kwargs["retweetCutOff"]
+		
+		# choose hashtags to search for!
+		if chooseRandomHashtags:
+			# choose random hashtags hastTags
+			self.__chooseHashtagsRandom(numOfTags=kwargs["numberOfRandomHashtags"])
+		else:
+			self.__tags = searchHashtags
+			print("Looking for tag(s) " + str(self.__tags))
+			print()
+		
 		# retweet a popular tweet with this tag and follow the
 		# user if applicable
-		print("Looking for tag " + tag)
-		print()
+		# instanciate a tweet analyzer
+		ta = TweetAnalyzer()
+
+		# counter to keep track of tweets analyzed for give hashtags!
+		# This is useful since some combinations of hashtags are hard
+		# to find 
+		tweetsProcessedThresh = 500
+
 		# look for a valid tweet to retweet it!
 		while True:
 
 			selectedTweet = None
+			processedTweetCounter = 0
 
 			for tweet in self.__errorHandler\
-			(tweepy.Cursor(self.__api.search,q=tag,lang="en").items()):
+			(tweepy.Cursor(self.__api.search,q=self.__tags[0],lang="en")\
+				.items(tweetsProcessedThresh+1)):
+				
+				# check if threshold is passed
+				if processedTweetCounter > tweetsProcessedThresh:
+					self.__chooseHashtagsRandom(numOfTags=\
+						kwargs["numberOfRandomHashtags"])
+					processedTweetCounter = 0
+
+
 				# sanity check
 				print("Processing tweet of user: @" + str(tweet.user.screen_name))
 				
 				# process tweet
-				selectedTweet = self.__processTweet(tweet,tag)
+				ta.setTweet(tweet)
+				try:
+					selectedTweet = self.__processTweet(tweet,ta)
+				except tweepy.RateLimitError:
+					print("Tweepy Rate Limit Error Reached!")
+					sleep(5*60)
+					continue
+
+
 				if not selectedTweet:
+					# increment processedTweetCounter
+					processedTweetCounter += 1
 					continue
 
 				if self.__retweetDone:
 					print("Tweet Successfully retweeted!!")
 					break
-			
+
+			# In some combinations of hashtags there
+			# is no returned value in api.search and 
+			# selectedTweet will be None.
+			if not selectedTweet:
+				print("No tweet with " + str(self.__tags) + " was found!")
+				self.__chooseHashtagsRandom(numOfTags=\
+					kwargs["numberOfRandomHashtags"])
+				continue
+
 			# check if user should be followed
-			if followUser:
+			if kwargs["followUser"]:
 				self.__followUser(selectedTweet.user.id)
 			break
 
 
-	def __processTweet(self,tweet,tag):
+	def __processTweet(self,tweet,ta):
 
 		# some cut-off vals
-		userFollowerCutOff = randint(0,1000) + 300
+		userFollowerCutOff = randint(0,1000) + 100
 
 		# determine whether to follow the user of not
 		userId = tweet.user.id
@@ -88,6 +162,15 @@ class TweetManager(object):
 		# is already retweeted!
 		if tweet.retweeted:
 			return None
+
+		# check if tweet has all the selected tags
+		tweetTags = ta.getAllHashtags()
+		for tag in self.__tags:
+			if tag not in tweetTags:
+				return None
+		# # if reached here then it has all the tags
+		# hasAllTags = True
+
 
 		# check if tweet is popular
 		isPopular = False
@@ -104,7 +187,7 @@ class TweetManager(object):
 			try:
 				tweet.retweet()
 				# update retweet log
-				self.__updateRetweetLog(tweet,tag)
+				self.__updateRetweetLog(tweet)
 				print("Tweet data was saved to retweet log file!")
 				# favor it with a low chance
 				if not tweet.favorited:
@@ -113,7 +196,7 @@ class TweetManager(object):
 				self.__retweetDone = True
 				return tweet
 
-			except tweepy.TweepError:
+			except:
 				# print(e.cause)
 				return None
 
@@ -122,7 +205,7 @@ class TweetManager(object):
 
 
 
-	def __updateRetweetLog(self,tweet,tag):
+	def __updateRetweetLog(self,tweet):
 
 		# update the retweet metaData
 		retweetFile = RETWEET_LOG_PATH + RETWEET_LOG_FILE
@@ -137,15 +220,23 @@ class TweetManager(object):
 				df[df["user ID"]==tweeetUserId]["user retweeted count"] += 1
 			else:
 				# new user is retweeted! update the log accordingly!
-				t = self.__getTweetMetaData(tweet,tag)
+				tags = ",".join(self.__tags)
+				t = self.__getTweetMetaData(tweet,tags)
+
+				# # sanity check
+				# print(t.to_string())
+				# print(df.to_string())
+
 				df = df.append(t)
-				# save new retweetLog
-				df.to_csv(retweetFile,sep=",")
+			
+			# save new retweetLog
+			df.to_csv(retweetFile,sep=",",index=False)
 
 		# if no retweet file is found then create it
 		else:
-			t = self.__getTweetMetaData(tweet,tag)
-			t.to_csv(retweetFile,sep=",")
+			tags = ",".join(self.__tags)
+			t = self.__getTweetMetaData(tweet,tags)
+			t.to_csv(retweetFile,sep=",",index=False)
 
 
 	def __getTweetMetaData(self,tweet,tag):

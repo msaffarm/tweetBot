@@ -3,7 +3,9 @@ import tweepy
 from random import randint
 import pandas as pd
 
-FOLLOWER_LOG_PATH = os.getcwd() + "/log/"
+
+CURRENT_DIR = os.path.abspath(os.path.dirname(__file__))
+FOLLOWER_LOG_PATH = CURRENT_DIR + "/../log/"
 FOLLOWR_LOG_FILE = "followerLog.csv"
 
 
