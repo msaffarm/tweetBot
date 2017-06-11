@@ -3,6 +3,7 @@ import sys
 import tweepy
 import requests
 from time import ctime
+from random import randint
 # import pandas as pd
 
 UTIL_PATH = os.getcwd() + "/../"
@@ -39,7 +40,14 @@ def retweetAtweet(api):
 
 	# look for a tweet with certain # and retweet it
 	tweetManager = twitMng.TweetManager(api=api)
-	tweetManager.findTweets(followUser=True,favorCutOff=10,retweetCutOff=10)
+
+	# randomly select one or two hashtags to retweet
+	choice = randint(0,1)
+	if choice==0:
+		tweetManager.findTweets(followUser=True,favorCutOff=10,retweetCutOff=10)
+	else:
+		tweetManager.findTweets(numberOfRandomHashtags=2,followUser=True,\
+			favorCutOff=5,retweetCutOff=5)
 
 
 def manageAccount(api):
